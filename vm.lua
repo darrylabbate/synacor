@@ -15,8 +15,8 @@ op = {
     function() r[w] =  y & z            ip = ip+4 end, -- and
     function() r[w] =  y | z            ip = ip+4 end, -- or
     function() r[w] = ~y & 0x7fff       ip = ip+3 end, -- not
-    function() r[w] = m[y]              ip = ip+3 end, -- rm
-    function() m[x] = y                 ip = ip+3 end, -- wm
+    function() r[w] = m[y]              ip = ip+3 end, -- rmem
+    function() m[x] = y                 ip = ip+3 end, -- wmem
     function() table.insert(s,ip+2)     ip = x    end, -- call
     function() ip = table.remove(s)               end, -- ret
     function() io.write(string.char(x)) ip = ip+2 end, -- out
