@@ -1,0 +1,41 @@
+op = {
+    fn { exit()                        }, // halt
+    fn { r[w] = y              ip += 3 }, // set
+    fn { s[sp++] = x           ip += 2 }, // push
+    fn { r[w] = s[--sp]        ip += 2 }, // pop
+    fn { r[w] = y == z         ip += 4 }, // eq
+    fn { r[w] = y >  z         ip += 4 }, // gt
+    fn { ip   = x                      }, // jmp
+    fn { ip   =  x ? y :       ip +  3 }, // jt
+    fn { ip   = !x ? y :       ip +  3 }, // jf
+    fn { r[w] = y + z & 0x7fff ip += 4 }, // add
+    fn { r[w] = y * z & 0x7fff ip += 4 }, // mult
+    fn { r[w] = y % z          ip += 4 }, // mod
+    fn { r[w] = y & z          ip += 4 }, // and
+    fn { r[w] = y | z          ip += 4 }, // or
+    fn { r[w] = ~y & 0x7fff    ip += 3 }, // not
+    fn { r[w] = m[y]           ip += 3 }, // rmem
+    fn { m[x] = y              ip += 3 }, // wmem
+    fn { s[sp++] = ip + 2      ip  = x }, // call
+    fn { ip = s[--sp]                  }, // ret
+    fn { putc(x)               ip += 2 }, // out
+    fn { r[w] = getc()         ip += 2 }, // in
+    fn {                       ip += 1 }  // noop
+}
+
+bin = open(arg[1])
+while !eof(bin) {
+    local l = getc(bin)
+    local h = getc(bin)
+    m[i++] = l | (h << 8)
+}
+close(bin)
+
+ip = 0
+loop {
+    x = m[ip+1] x = x <= 0x7fff ? x : r[x&0x7fff]
+    y = m[ip+2] y = y <= 0x7fff ? y : r[y&0x7fff]
+    z = m[ip+3] z = z <= 0x7fff ? z : r[z&0x7fff]
+    w = m[ip+1] & 0x7fff
+    op[m[ip]]()
+}
