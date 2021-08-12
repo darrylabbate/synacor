@@ -19,8 +19,73 @@ op = {
     fn { s[sp++] = ip + 2      ip  = x }, // call
     fn { ip = s[--sp]                  }, // ret
     fn { putc(x)               ip += 2 }, // out
-    fn { r[w] = getc()         ip += 2 }, // in
+    // fn { r[w] = getc()         ip += 2 }, // in
+    fn { read_input()          ip += 2 }, // in
     fn {                       ip += 1 }  // noop
+}
+
+mnemonics = split("halt set push pop eq gt jmp jt jf add mult mod and
+or not rmem wmem call ret out in noop")
+
+disas = {
+    fn { write(    "halt", md) dp += 1 },
+    fn { write(fmt("set  R%d %d", dw, dy), md) dp += 3 },
+    fn { write(fmt("push %d", dx), md) dp += 2 },
+    fn { write(fmt("pop  R%d", dw), md) dp += 2 },
+    fn { write(fmt("eq   R%d %d %d", dw, dy, dz), md) dp += 4},
+    fn { write(fmt("gt   R%d %d %d", dw, dy, dz), md) dp += 4},
+    fn { write(fmt("jmp  %d", dx), md) dp += 2 },
+    fn { write(fmt("jt   %d %d", dx, dy), md) dp += 3 },
+    fn { write(fmt("jf   %d %d", dx, dy), md) dp += 3 },
+    fn { write(fmt("add  R%d %d %d", dw, dy, dz), md) dp += 4},
+    fn { write(fmt("mult R%d %d %d", dw, dy, dz), md) dp += 4},
+    fn { write(fmt("mod  R%d %d %d", dw, dy, dz), md) dp += 4},
+    fn { write(fmt("and  R%d %d %d", dw, dy, dz), md) dp += 4},
+    fn { write(fmt("or   R%d %d %d", dw, dy, dz), md) dp += 4},
+    fn { write(fmt("not  R%d %d", dw, dy), md) dp += 3 },
+    fn { write(fmt("rmem R%d %d", dw, m[dy]), md) dp += 3 },
+    fn { write(fmt("wmem M%d %d", dx, dy), md) dp += 3 },
+    fn { write(fmt("call %d", dx), md) dp += 2 },
+    fn { write(    "ret", md) dp += 1 },
+    fn { write(fmt("out  '%c'", dx), md) dp += 2 },
+    fn { write(fmt("in   R%d", dw), md) dp += 2 },
+    fn { write(    "noop", md) dp += 1 }
+}
+
+fn read_input {
+    if ibuf == null {
+        do {
+            c = getc()
+            ibuf #= char(c)
+        } while c != '\n'
+    }
+    if ibuf ~ /dump/ {
+        dump_mem()
+        ibuf = null
+        "What do you do?"
+        read_input()
+    } else {
+        r[w] = byte(ibuf)
+        ibuf = ibuf == "\n" ? null : ibuf[1..]
+    }
+}
+
+fn dump_mem {
+    dp = 0
+    md = open("memdump.s", "w")
+    while dp < #m {
+        write(fmt("0x%04x: %5d ", dp, m[dp]), md);
+        dx = m[dp+1] dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
+        dy = m[dp+2] dy = dy <= 0x7fff ? dy : r[dy&0x7fff]
+        dz = m[dp+3] dz = dz <= 0x7fff ? dz : r[dz&0x7fff]
+        dw = m[dp+1] & 0x7fff
+        if m[dp] <= 21
+            disas[m[dp]]()
+        else
+            disas[21]()
+        write("\n", md)
+    }
+    close(md)
 }
 
 bin = open(arg[1])
