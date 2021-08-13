@@ -23,117 +23,6 @@ op = {
     fn {                       ip += 1 }  // noop
 }
 
-mnemonics = split("halt set push pop eq gt jmp jt jf add mult mod and or not rmem wmem call ret out in noop")
-
-fn disas_mnemonic(m) {
-    if m <= 21
-        write(fmt("%-4s ", mnemonics[m]), md)
-    else
-        write("     ", md)
-}
-
-fn disas_addr(addr, file) {
-    write(fmt("0x%04x: %04x ", addr, m[addr]), file)
-}
-
-fn disas_operands(n) {
-    write(n < 1 ? "     " : fmt("%04x ", m[dp+1]), md)
-    write(n < 2 ? "     " : fmt("%04x ", m[dp+2]), md)
-    write(n < 3 ? "     " : fmt("%04x ", m[dp+3]), md)
-}
-
-fn disas_noop {
-    disas_operands(0)
-    disas_mnemonic(m[dp])
-    dp += 1
-}
-
-fn disas_out {
-    disas_operands(0)
-    disas_mnemonic(m[dp])
-    write("\"", md)
-    while m[dp] == 19 {
-        write(dx == '\n' ? "\\n" : char(dx), md)
-        dp += 2
-        dx = m[dp+1] dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
-    }
-    write("\"", md)
-}
-
-fn disasX {
-    disas_operands(1)
-    disas_mnemonic(m[dp])
-    write(fmt("%x", dx), md)
-    dp += 2
-}
-fn disasXY {
-    disas_operands(2)
-    disas_mnemonic(m[dp])
-    write(fmt("%-5x %d", dx, dy), md)
-    dp += 3
-}
-
-fn disasR {
-    disas_operands(1)
-    disas_mnemonic(m[dp])
-    write(fmt("R%x", dw), md)
-    dp += 2
-}
-
-fn disasRY {
-    disas_operands(2)
-    disas_mnemonic(m[dp])
-    write(fmt("R%-4x %x", dw, dy), md)
-    dp += 3
-}
-
-fn disasRM {
-    disas_operands(2)
-    disas_mnemonic(m[dp])
-    write(fmt("R%-4x M%x", dw, dy), md)
-    dp += 3
-}
-
-fn disasRYZ {
-    disas_operands(3)
-    disas_mnemonic(m[dp])
-    write(fmt("R%-4x %-4x %x", dw, dy, dz), md)
-    dp += 4
-}
-
-fn disasMY {
-    disas_operands(2)
-    disas_mnemonic(m[dp])
-    write(fmt("M%-4x %x", dw, dy), md)
-    dp += 3
-}
-
-
-disas = {
-    disas_noop,
-    disasRY,
-    disasX,
-    disasR,
-    disasRYZ,
-    disasRYZ,
-    disasX,
-    disasXY,
-    disasXY,
-    disasRYZ,
-    disasRYZ,
-    disasRYZ,
-    disasRYZ,
-    disasRYZ,
-    disasRY,
-    disasRM,
-    disasMY,
-    disasX,
-    disas_noop,
-    disas_out,
-    disasR,
-    disas_noop,
-}
-
 fn read_input {
     if ibuf == null {
         do {
@@ -141,46 +30,91 @@ fn read_input {
             ibuf #= char(c)
         } while c != '\n'
     }
-    if ibuf ~ /dump/ {
-        dump_mem("memdump.s")
+    if ibuf == "disas\n" {
+        disas_mem()
         ibuf = null
         "What do you do?"
         read_input()
-    } elif ibuf ~ /strings/ {
+    } elif ibuf == "strings\n" {
         dump_strings()
         ibuf = null
         "What do you do?"
         read_input()
+    } elif ibuf == "q\n" {
+        "Exiting VM"
+        exit()
     } else {
         r[w] = byte(ibuf)
         ibuf = ibuf == "\n" ? null : ibuf[1..]
     }
 }
 
-fn dump_mem(filename) {
+mnemonics = split("halt set push pop eq gt jmp jt jf add mult mod and or not rmem wmem call ret out in noop")
+
+arity = {0,2,1,1,3,3,1,2,2,3,3,3,3,3,2,2,2,1,0,1,1,0}
+
+fn disas_mnemonic(m) {
+    if m <= 21
+        write(fmt("  %-4s ", mnemonics[m]), md)
+    else
+        write("     ", md)
+}
+
+fn disas_addr(addr, file) {
+    write(fmt("0x%04x: %04x", addr, m[addr]), file)
+}
+
+fn disas_raw_words(n) {
+    write(n < 1 ? "     " : fmt(" %04x", m[dp+1]), md)
+    write(n < 2 ? "     " : fmt(" %04x", m[dp+2]), md)
+    write(n < 3 ? "     " : fmt(" %04x", m[dp+3]), md)
+}
+
+RSTR = " $%d"
+OSTR = " 0x%x"
+
+fn disas_operands(n) {
+    if n >= 1
+        write(fmt(m[dp+1] <= 0x7fff ? OSTR : RSTR, m[dp+1] & 0x7fff), md)
+    if n >= 2
+        write(fmt(m[dp+2] <= 0x7fff ? OSTR : RSTR, m[dp+2] & 0x7fff), md)
+    if n >= 3
+        write(fmt(m[dp+3] <= 0x7fff ? OSTR : RSTR, m[dp+3] & 0x7fff), md)
+}
+
+fn disas_out {
+    write(" \"", md)
+    while m[dp] == 19 {
+        dx = m[dp+1] dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
+        write(dx == '\n' ? "\\n" : char(dx), md)
+        dp += 2
+    }
+    write("\"", md)
+}
+
+fn disas_mem {
     dp = 0
+    local filename = "mem.s"
     md = open(filename, "w")
     while dp < #m {
-        if dp == ip
-            write("=> ", md)
-        else
-            write("   ", md)
         disas_addr(dp, md)
-        dx = m[dp+1] dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
-        dy = m[dp+2] dy = dy <= 0x7fff ? dy : r[dy&0x7fff]
-        dz = m[dp+3] dz = dz <= 0x7fff ? dz : r[dz&0x7fff]
-        dw = m[dp+1] & 0x7fff
-        if m[dp] <= 21
-            disas[m[dp]]()
-        else
-            dp += 1
+        disas_raw_words(arity[m[dp]])
+        disas_mnemonic(m[dp])
+        if m[dp] == 19 {
+            disas_out()
+        } else {
+            disas_operands(arity[m[dp]] ?: 0)
+            dp += arity[m[dp]] + 1
+        }
         write("\n", md)
     }
+    "[VM] Disassembled memory state dumped to", filename
     close(md)
 }
 
 fn dump_strings {
-    sd = open("strings.txt", "w")
+    local filename = "strings.txt"
+    sd = open(filename, "w")
     dp = 0
     while dp < #m {
         if m[dp] >= ' ' && m[dp] <= '~' {
@@ -193,6 +127,7 @@ fn dump_strings {
         }
         dp++
     }
+    "[VM] Strings dumped to", filename
     close(sd)
 }
 
