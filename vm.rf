@@ -19,37 +19,119 @@ op = {
     fn { s[sp++] = ip + 2      ip  = x }, // call
     fn { ip = s[--sp]                  }, // ret
     fn { putc(x)               ip += 2 }, // out
-    // fn { r[w] = getc()         ip += 2 }, // in
     fn { read_input()          ip += 2 }, // in
     fn {                       ip += 1 }  // noop
 }
 
-mnemonics = split("halt set push pop eq gt jmp jt jf add mult mod and
-or not rmem wmem call ret out in noop")
+mnemonics = split("halt set push pop eq gt jmp jt jf add mult mod and or not rmem wmem call ret out in noop")
+
+fn disas_mnemonic(m) {
+    if m <= 21
+        write(fmt("%-4s ", mnemonics[m]), md)
+    else
+        write("     ", md)
+}
+
+fn disas_addr(addr, file) {
+    write(fmt("0x%04x: %04x ", addr, m[addr]), file)
+}
+
+fn disas_operands(n) {
+    write(n < 1 ? "     " : fmt("%04x ", m[dp+1]), md)
+    write(n < 2 ? "     " : fmt("%04x ", m[dp+2]), md)
+    write(n < 3 ? "     " : fmt("%04x ", m[dp+3]), md)
+}
+
+fn disas_noop {
+    disas_operands(0)
+    disas_mnemonic(m[dp])
+    dp += 1
+}
+
+fn disas_out {
+    disas_operands(0)
+    disas_mnemonic(m[dp])
+    write("\"", md)
+    while m[dp] == 19 {
+        write(dx == '\n' ? "\\n" : char(dx), md)
+        dp += 2
+        dx = m[dp+1] dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
+    }
+    write("\"", md)
+}
+
+fn disasX {
+    disas_operands(1)
+    disas_mnemonic(m[dp])
+    write(fmt("%x", dx), md)
+    dp += 2
+}
+fn disasXY {
+    disas_operands(2)
+    disas_mnemonic(m[dp])
+    write(fmt("%-5x %d", dx, dy), md)
+    dp += 3
+}
+
+fn disasR {
+    disas_operands(1)
+    disas_mnemonic(m[dp])
+    write(fmt("R%x", dw), md)
+    dp += 2
+}
+
+fn disasRY {
+    disas_operands(2)
+    disas_mnemonic(m[dp])
+    write(fmt("R%-4x %x", dw, dy), md)
+    dp += 3
+}
+
+fn disasRM {
+    disas_operands(2)
+    disas_mnemonic(m[dp])
+    write(fmt("R%-4x M%x", dw, dy), md)
+    dp += 3
+}
+
+fn disasRYZ {
+    disas_operands(3)
+    disas_mnemonic(m[dp])
+    write(fmt("R%-4x %-4x %x", dw, dy, dz), md)
+    dp += 4
+}
+
+fn disasMY {
+    disas_operands(2)
+    disas_mnemonic(m[dp])
+    write(fmt("M%-4x %x", dw, dy), md)
+    dp += 3
+}
+
 
 disas = {
-    fn { write(    "halt", md) dp += 1 },
-    fn { write(fmt("set  R%d %d", dw, dy), md) dp += 3 },
-    fn { write(fmt("push %d", dx), md) dp += 2 },
-    fn { write(fmt("pop  R%d", dw), md) dp += 2 },
-    fn { write(fmt("eq   R%d %d %d", dw, dy, dz), md) dp += 4},
-    fn { write(fmt("gt   R%d %d %d", dw, dy, dz), md) dp += 4},
-    fn { write(fmt("jmp  %d", dx), md) dp += 2 },
-    fn { write(fmt("jt   %d %d", dx, dy), md) dp += 3 },
-    fn { write(fmt("jf   %d %d", dx, dy), md) dp += 3 },
-    fn { write(fmt("add  R%d %d %d", dw, dy, dz), md) dp += 4},
-    fn { write(fmt("mult R%d %d %d", dw, dy, dz), md) dp += 4},
-    fn { write(fmt("mod  R%d %d %d", dw, dy, dz), md) dp += 4},
-    fn { write(fmt("and  R%d %d %d", dw, dy, dz), md) dp += 4},
-    fn { write(fmt("or   R%d %d %d", dw, dy, dz), md) dp += 4},
-    fn { write(fmt("not  R%d %d", dw, dy), md) dp += 3 },
-    fn { write(fmt("rmem R%d %d", dw, m[dy]), md) dp += 3 },
-    fn { write(fmt("wmem M%d %d", dx, dy), md) dp += 3 },
-    fn { write(fmt("call %d", dx), md) dp += 2 },
-    fn { write(    "ret", md) dp += 1 },
-    fn { write(fmt("out  '%c'", dx), md) dp += 2 },
-    fn { write(fmt("in   R%d", dw), md) dp += 2 },
-    fn { write(    "noop", md) dp += 1 }
+    disas_noop,
+    disasRY,
+    disasX,
+    disasR,
+    disasRYZ,
+    disasRYZ,
+    disasX,
+    disasXY,
+    disasXY,
+    disasRYZ,
+    disasRYZ,
+    disasRYZ,
+    disasRYZ,
+    disasRYZ,
+    disasRY,
+    disasRM,
+    disasMY,
+    disasX,
+    disas_noop,
+    disas_out,
+    disasR,
+    disas_noop,
 }
 
 fn read_input {
@@ -60,7 +142,12 @@ fn read_input {
         } while c != '\n'
     }
     if ibuf ~ /dump/ {
-        dump_mem()
+        dump_mem("memdump.s")
+        ibuf = null
+        "What do you do?"
+        read_input()
+    } elif ibuf ~ /strings/ {
+        dump_strings()
         ibuf = null
         "What do you do?"
         read_input()
@@ -70,11 +157,15 @@ fn read_input {
     }
 }
 
-fn dump_mem {
+fn dump_mem(filename) {
     dp = 0
-    md = open("memdump.s", "w")
+    md = open(filename, "w")
     while dp < #m {
-        write(fmt("0x%04x: %5d ", dp, m[dp]), md);
+        if dp == ip
+            write("=> ", md)
+        else
+            write("   ", md)
+        disas_addr(dp, md)
         dx = m[dp+1] dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
         dy = m[dp+2] dy = dy <= 0x7fff ? dy : r[dy&0x7fff]
         dz = m[dp+3] dz = dz <= 0x7fff ? dz : r[dz&0x7fff]
@@ -82,10 +173,27 @@ fn dump_mem {
         if m[dp] <= 21
             disas[m[dp]]()
         else
-            disas[21]()
+            dp += 1
         write("\n", md)
     }
     close(md)
+}
+
+fn dump_strings {
+    sd = open("strings.txt", "w")
+    dp = 0
+    while dp < #m {
+        if m[dp] >= ' ' && m[dp] <= '~' {
+            write(fmt("%04x: ", dp), sd)
+            while m[dp] >= ' ' && m[dp] <= '~' {
+                write(char(m[dp]), sd)
+                dp++
+            }
+            write("\n", sd)
+        }
+        dp++
+    }
+    close(sd)
 }
 
 bin = open(arg[1])
