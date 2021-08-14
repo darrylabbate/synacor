@@ -50,8 +50,34 @@ north
 regset 7 25734
 memset 0x1571 21
 memset 0x1572 21
-memset 0x1573 1
-memset 0x1575 1
-memset 0x1576 21
+memset 0x1576 0x8000
 take teleporter
 use teleporter
+north
+north
+north
+north
+north
+north
+north
+east
+take journal
+west
+north
+north
+take orb
+north
+east
+east
+north
+west
+south
+east
+east
+west
+north
+north
+east
+vault
+take mirror
+use mirror
