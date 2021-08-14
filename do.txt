@@ -47,7 +47,11 @@ use shiny coin
 use concave coin
 use corroded coin
 north
+regset 7 25734
+memset 0x1571 21
+memset 0x1572 21
+memset 0x1573 1
+memset 0x1575 1
+memset 0x1576 21
 take teleporter
 use teleporter
-take business card
-take strange book

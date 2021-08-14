@@ -23,6 +23,8 @@ op = {
     fn {                       ip += 1 }  // noop
 }
 
+CODE_ADDR = 0x17f2
+
 fn read_input {
     if ibuf == null {
         do {
@@ -30,24 +32,54 @@ fn read_input {
             ibuf #= char(c)
         } while c != '\n'
     }
-    if ibuf == "disas\n" {
-        local f = open("mem.s", "w")
-        disas_mem(f)
-        "[VM] Disassembled memory state dumped to mem.s"
+    if ibuf ~ / ^disas   # Dump disassembly
+              | ^strings # Dump strings
+              | ^code    # Print most recnt code
+              | ^memset  # Set memory address value
+              | ^regset  # Set register value
+              | ^q$      # Exit VM
+              /x {
+        if ibuf ~ /^disas/ {
+            local f = open("mem.s", "w")
+            disas_mem(f)
+            "[VM] Disassembled memory state dumped to mem.s"
+            close(f)
+        } elif ibuf ~ /^strings/ {
+            local f = open("strings.txt", "w")
+            dump_strings(f)
+            "[VM] Strings dumped to strings.txt"
+            close(f)
+        } elif ibuf ~ /^code/ {
+            "[VM] Most recent code:", find_str(CODE_ADDR)
+        } elif ibuf ~ /^memset/ {
+            local cmd  = split(ibuf)
+            local addr = cmd[1] != null ? num(cmd[1]) : null
+            local val  = num(cmd[2])
+            if addr == null || addr >= #m {
+                "[VM] Invalid address"
+            } else {
+                m[addr] = val
+                fmt("[VM] Address 0x%x set to 0x%x", addr, val)
+            }
+        } elif ibuf ~ /^regset/ {
+            local cmd = split(ibuf)
+            local reg = cmd[1] != null ? num(cmd[1]) : null
+            local val = num(cmd[2])
+            if reg == null || reg > 7 {
+                "[VM] Invalid register"
+            } else {
+                r[reg] = val
+                fmt("[VM] $%d set to 0x%x", reg, val)
+            }
+        } elif ibuf == "q\n" {
+            "[VM] Exiting VM"
+            exit()
+        }
         ibuf = null
         "What do you do?"
         read_input()
-    } elif ibuf == "strings\n" {
-        local f = open("strings.txt", "w")
-        dump_strings(f)
-        "[VM] Strings dumped to strings.txt"
-        ibuf = null
-        "What do you do?"
-        read_input()
-    } elif ibuf == "q\n" {
-        "Exiting VM"
-        exit()
-    } else {
+    }
+    else {
         r[w] = byte(ibuf)
         ibuf = ibuf == "\n" ? null : ibuf[1..]
     }
@@ -98,6 +130,8 @@ fn disas_out(f) {
 
 STRINGS_START = 0x17b5
 STRINGS_END   = 0x68e3
+MAX_STRLEN    = 56
+MAX_WORDS     = 10
 
 fn disas_mem(f) {
     dp = 0
@@ -121,9 +155,17 @@ fn disas_mem(f) {
     while dp < STRINGS_END {
         if char(m[dp]) ~ /[ -~\n]/ {
             write(fmt("0x%04x: \"", dp), f)
+            local count = 0
             while (m[dp] >= ' ' && m[dp] <= '~') || m[dp] == '\n' {
-                write(m[dp] == '\n' ? "\\n" : char(m[dp]), f)
+                write(m[dp] == '\n' ? "\\n" :
+                      m[dp] == '"'  ? "\\\""  :
+                      char(m[dp]), f)
+                if char(m[dp]) ~ /[\n"]/
+                    if ++count % MAX_STRLEN == 0
+                        write("\"\n        \"", f)
                 dp++
+                if ++count % MAX_STRLEN == 0
+                    write("\"\n        \"", f)
             }
             write("\"\n", f)
         }
@@ -134,16 +176,22 @@ fn disas_mem(f) {
     write("\n; Unknown\n\n", f)
     while dp < #m {
         write(fmt("0x%04x: ", dp), f)
-        for i in 7 {
+        for i in 1..MAX_WORDS {
             if m[dp] == null break
             write(fmt(" %04x", m[dp]), f)
             dp++
         }
         write("\n", f)
     }
-    write("\n", f)
 }
 
+fn find_str(addr) {
+    local str
+    while char(m[addr]) ~ /[ -~\n]/ {
+        str #= char(m[addr++])
+    }
+    return str ?: "<not found>"
+}
 fn dump_strings(f) {
     dp = 0
     while dp < #m {
