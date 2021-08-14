@@ -47,10 +47,10 @@ use shiny coin
 use concave coin
 use corroded coin
 north
-regset 7 25734
-memset 0x1571 21
-memset 0x1572 21
-memset 0x1576 0x8000
+set $7 25734
+set 0x1571 21
+set 0x1572 21
+set 0x1576 0x8000
 take teleporter
 use teleporter
 north

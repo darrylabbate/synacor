@@ -35,8 +35,7 @@ fn read_input {
     if ibuf ~ / ^disas   # Dump disassembly
               | ^strings # Dump strings
               | ^code    # Print most recnt code
-              | ^memset  # Set memory address value
-              | ^regset  # Set register value
+              | ^set     # Set register or memory value
               | ^q$      # Exit VM
               /x {
         if ibuf ~ /^disas/ {
@@ -51,25 +50,25 @@ fn read_input {
             close(f)
         } elif ibuf ~ /^code/ {
             "[VM] Most recent code:", find_str(CODE_ADDR)
-        } elif ibuf ~ /^memset/ {
+        } elif ibuf ~ /^set/ {
             local cmd  = split(ibuf)
-            local addr = cmd[1] != null ? num(cmd[1]) : null
+            local arg1 = cmd[1]
             local val  = num(cmd[2])
-            if addr == null || addr >= #m {
-                "[VM] Invalid address"
+            if arg1 ~ /^\$(\d*)/ {
+                if $1 !~ /^[0-7]$/ {
+                    fmt("[VM] Invalid register: $%d", $1)
+                } else {
+                    r[$1] = val
+                    fmt("[VM] $%d set to %d (0x%x)", $1, val, val)
+                }
             } else {
-                m[addr] = val
-                fmt("[VM] Address 0x%x set to 0x%x", addr, val)
-            }
-        } elif ibuf ~ /^regset/ {
-            local cmd = split(ibuf)
-            local reg = cmd[1] != null ? num(cmd[1]) : null
-            local val = num(cmd[2])
-            if reg == null || reg > 7 {
-                "[VM] Invalid register"
-            } else {
-                r[reg] = val
-                fmt("[VM] $%d set to 0x%x", reg, val)
+                arg1 = num(arg1)
+                if arg1 == null || arg1 < 0 || arg1 > #m {
+                    fmt("[VM] Invalid memory address: %s", arg1)
+                } else {
+                    m[arg1] = val
+                    fmt("[VM] Address 0x%x set to %d (0x%x)", arg1, val, val)
+                }
             }
         } elif ibuf == "q\n" {
             "[VM] Exiting VM"
@@ -131,7 +130,7 @@ fn disas_out(f) {
 STRINGS_START = 0x17b5
 STRINGS_END   = 0x68e3
 MAX_STRLEN    = 56
-MAX_WORDS     = 10
+MAX_WORDS     = 8
 
 fn disas_mem(f) {
     dp = 0
@@ -192,6 +191,7 @@ fn find_str(addr) {
     }
     return str ?: "<not found>"
 }
+
 fn dump_strings(f) {
     dp = 0
     while dp < #m {
