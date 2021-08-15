@@ -96,13 +96,21 @@ fn disas_mnemonic(m, f) {
 }
 
 fn disas_addr(addr, f) {
-    write(fmt("0x%04x:  %04x", addr, m[addr]), f)
+    local b0 = m[addr] & 0xff
+    local b1 = (m[addr] >> 8) & 0xff
+    write(fmt("0x%04x: %02x %02x", addr, b0, b1), f)
 }
 
-fn disas_raw_words(n, f) {
-    write(n < 1 ? "     " : fmt(" %04x", m[dp+1]), f)
-    write(n < 2 ? "     " : fmt(" %04x", m[dp+2]), f)
-    write(n < 3 ? "     " : fmt(" %04x", m[dp+3]), f)
+fn disas_le_bytes(n, f) {
+    local b0 = m[dp+1] & 0xff
+    local b1 = (m[dp+1] >> 8) & 0xff
+    local b2 = m[dp+2] & 0xff
+    local b3 = (m[dp+2] >> 8) & 0xff
+    local b4 = m[dp+3] & 0xff
+    local b5 = (m[dp+3] >> 8) & 0xff
+    write(n < 1 ? "      " : fmt(" %02x %02x", b0, b1), f)
+    write(n < 2 ? "      " : fmt(" %02x %02x", b2, b3), f)
+    write(n < 3 ? "      " : fmt(" %02x %02x", b4, b5), f)
 }
 
 RSTR = " $%d"
@@ -135,10 +143,10 @@ MAX_WORDS     = 8
 fn disas_mem(f) {
     dp = 0
     // Executable code
-    write("; Program\n\n", f)
+    write("; Executable code\n\n", f)
     while dp < STRINGS_START-1 {
         disas_addr(dp, f)
-        disas_raw_words(arity[m[dp]], f)
+        disas_le_bytes(arity[m[dp]], f)
         disas_mnemonic(m[dp], f)
         if m[dp] == 19 {
             disas_out(f)
@@ -150,7 +158,7 @@ fn disas_mem(f) {
     }
 
     // String data
-    write("\n; Strings\n\n", f)
+    write("\n; String data\n\n", f)
     while dp < STRINGS_END {
         if char(m[dp]) ~ /[ -~\n]/ {
             write(fmt("0x%04x: \"", dp), f)
@@ -172,12 +180,12 @@ fn disas_mem(f) {
     }
 
     // Unknown data
-    write("\n; Unknown\n\n", f)
+    write("\n; Unknown/encrypted data\n\n", f)
     while dp < #m {
-        write(fmt("0x%04x: ", dp), f)
+        write(fmt("0x%04x:", dp), f)
         for i in 1..MAX_WORDS {
             if m[dp] == null break
-            write(fmt(" %04x", m[dp]), f)
+            write(fmt(" %02x %02x", m[dp] & 0xff, (m[dp] >> 8) & 0xff), f)
             dp++
         }
         write("\n", f)
