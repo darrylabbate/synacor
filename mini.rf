@@ -1,0 +1,1 @@
+g=getc b=open(arg[1])while!eof(b)$+s++=g(b)|g(b)<<8close(b)M=32768while o=$+p++{x=$p<M?$p:r[w=$p%M]y=$++p<M?$p:r[$p%M]z=$(p+1)z=z<M?z:r[z%M]v=r[w]eval("r[w]="#split("v y v$+s++=x $--s y==z y>z v;p=x v v (y+z)%M y*z%M y%z y&z y|z ~y%M $y v$x=y v$+s++=p;p=x v;p=$--s v;putc(x) g() v;--p")[o])p+=0x27167191a3301f[o]if!x^o&1p=78~o?y:p}
