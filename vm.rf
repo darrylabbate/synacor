@@ -41,15 +41,15 @@ fn read_input {
         if ibuf ~ /^disas/ {
             local f = open("mem.s", "w")
             disas_mem(f)
-            print "[VM] Disassembled memory state dumped to mem.s"
+            print("[VM] Disassembled memory state dumped to mem.s")
             close(f)
         } elif ibuf ~ /^strings/ {
             local f = open("strings.txt", "w")
             dump_strings(f)
-            print "[VM] Strings dumped to strings.txt"
+            print("[VM] Strings dumped to strings.txt")
             close(f)
         } elif ibuf ~ /^code/ {
-            print "[VM] Most recent code:", find_str(CODE_ADDR)
+            print("[VM] Most recent code:", find_str(CODE_ADDR))
         } elif ibuf ~ /^set/ {
             local cmd  = split(ibuf)
             local arg1 = cmd[1]
@@ -71,11 +71,11 @@ fn read_input {
                 }
             }
         } elif ibuf == "q\n" {
-            print "[VM] Exiting VM"
+            print("[VM] Exiting VM")
             exit()
         }
         ibuf = null
-        print "What do you do?"
+        print("What do you do?")
         read_input()
     }
     else {
