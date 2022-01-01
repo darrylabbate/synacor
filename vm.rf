@@ -1,3 +1,6 @@
+#!/usr/bin/env riff
+// usage: cat do.txt - | ./vm.rf challenge.bin
+
 op = {
     fn { exit()                        }, // halt
     fn { r[w] = y              ip += 3 }, // set
@@ -71,14 +74,13 @@ fn read_input {
                 }
             }
         } elif ibuf == "q\n" {
-            print("[VM] Exiting VM")
+            print("[VM] Exiting...")
             exit()
         }
         ibuf = null
         print("What do you do?")
         read_input()
-    }
-    else {
+    } else {
         r[w] = byte(ibuf)
         ibuf = ibuf == "\n" ? null : ibuf[1..]
     }
@@ -86,7 +88,7 @@ fn read_input {
 
 mnemonics = split("halt set push pop eq gt jmp jt jf add mult mod and or not rmem wmem call ret out in noop")
 
-arity = {0,2,1,1,3,3,1,2,2,3,3,3,3,3,2,2,2,1,0,1,1,0}
+arity = [0,2,1,1,3,3,1,2,2,3,3,3,3,3,2,2,2,1,0,1,1,0]
 
 fn disas_mnemonic(m, f) {
     if m <= 21
