@@ -1,5 +1,14 @@
 #!/usr/bin/env riff
-// usage: cat do.txt - | ./vm.rf challenge.bin
+// usage:
+//   cat do.txt - | ./vm.rf challenge.bin
+
+fn vm_msg(s) { print("[VM]", s) }
+
+CODE_ADDR     = 0x17f2
+STRINGS_START = 0x17b5
+STRINGS_END   = 0x68e3
+MAX_STRLEN    = 72
+MAX_WORDS     = 8
 
 op = {
     fn { exit()                        }, // halt
@@ -26,8 +35,6 @@ op = {
     fn {                       ip += 1 }  // noop
 }
 
-CODE_ADDR = 0x17f2
-
 fn read_input {
     if ibuf == null {
         do {
@@ -37,44 +44,40 @@ fn read_input {
     }
     if ibuf ~ / ^disas   # Dump disassembly
               | ^strings # Dump strings
-              | ^code    # Print most recnt code
+              | ^code    # Print most recent code
               | ^set     # Set register or memory value
               | ^q$      # Exit VM
               /x {
         if ibuf ~ /^disas/ {
-            local f = open("mem.s", "w")
-            disas_mem(f)
-            print("[VM] Disassembled memory state dumped to mem.s")
-            close(f)
+            disas_mem("mem.s")
+            vm_msg("Disassembled memory state dumped to mem.s")
         } elif ibuf ~ /^strings/ {
-            local f = open("strings.txt", "w")
-            dump_strings(f)
-            print("[VM] Strings dumped to strings.txt")
-            close(f)
+            dump_strings("strings.txt")
+            vm_msg("Strings dumped to strings.txt")
         } elif ibuf ~ /^code/ {
-            print("[VM] Most recent code:", find_str(CODE_ADDR))
+            vm_msg("Most recent code: #{find_str(CODE_ADDR)}")
         } elif ibuf ~ /^set/ {
             local cmd  = split(ibuf)
             local arg1 = cmd[1]
             local val  = num(cmd[2])
             if arg1 ~ /^\$(\d*)/ {
                 if $1 !~ /^[0-7]$/ {
-                    printf("[VM] Invalid register: $%d\n", $1)
+                    vm_msg("Invalid register: #arg1")
                 } else {
                     r[$1] = val
-                    printf("[VM] $%d set to %d (0x%x)\n", $1, val, val)
+                    vm_msg("#arg1 set to #val (#{hex(val)})")
                 }
             } else {
                 arg1 = num(arg1)
                 if arg1 == null || arg1 < 0 || arg1 > #m {
-                    printf("[VM] Invalid memory address: %s\n", arg1)
+                    vm_msg("Invalid memory address: #arg1")
                 } else {
                     m[arg1] = val
-                    printf("[VM] Address 0x%x set to %d (0x%x)\n", arg1, val, val)
+                    vm_msg("Address #{hex(arg1)} set to #val (#{hex(val)})")
                 }
             }
         } elif ibuf == "q\n" {
-            print("[VM] Exiting...")
+            vm_msg("Exiting...")
             exit()
         }
         ibuf = null
@@ -93,56 +96,41 @@ arity = [0,2,1,1,3,3,1,2,2,3,3,3,3,3,2,2,2,1,0,1,1,0]
 fn disas_mnemonic(m, f) {
     if m <= 21
         write(fmt("  %-4s ", mnemonics[m]), f)
-    else
-        write("     ", f)
 }
 
 fn disas_addr(addr, f) {
-    local b0 = m[addr] & 0xff
+    local b0 =  m[addr]       & 0xff
     local b1 = (m[addr] >> 8) & 0xff
     write(fmt("0x%04x: %02x %02x", addr, b0, b1), f)
 }
 
 fn disas_le_bytes(n, f) {
-    local b0 = m[dp+1] & 0xff
-    local b1 = (m[dp+1] >> 8) & 0xff
-    local b2 = m[dp+2] & 0xff
-    local b3 = (m[dp+2] >> 8) & 0xff
-    local b4 = m[dp+3] & 0xff
-    local b5 = (m[dp+3] >> 8) & 0xff
-    write(n < 1 ? "      " : fmt(" %02x %02x", b0, b1), f)
-    write(n < 2 ? "      " : fmt(" %02x %02x", b2, b3), f)
-    write(n < 3 ? "      " : fmt(" %02x %02x", b4, b5), f)
+    for i in 1..3 {
+        local b0 =  m[dp+i]       & 0xff
+        local b1 = (m[dp+i] >> 8) & 0xff
+        write(n < i ? "      " : fmt(" %02x %02x", b0, b1), f)
+    }
 }
 
-RSTR = " $%d"
-OSTR = " 0x%x"
-
 fn disas_operands(n, f) {
-    if n >= 1
-        write(fmt(m[dp+1] <= 0x7fff ? OSTR : RSTR, m[dp+1] & 0x7fff), f)
-    if n >= 2
-        write(fmt(m[dp+2] <= 0x7fff ? OSTR : RSTR, m[dp+2] & 0x7fff), f)
-    if n >= 3
-        write(fmt(m[dp+3] <= 0x7fff ? OSTR : RSTR, m[dp+3] & 0x7fff), f)
+    if !n return;
+    for i in 1..n
+        write(fmt(m[dp+i] <= 0x7fff ? " 0x%x" : " x%d", m[dp+i] & 0x7fff), f)
 }
 
 fn disas_out(f) {
     write(" \"", f)
     while m[dp] == 19 {
-        local dx = m[dp+1] dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
+        local dx = m[dp+1]
+        dx = dx <= 0x7fff ? dx : r[dx&0x7fff]
         write(dx == '\n' ? "\\n" : char(dx), f)
         dp += 2
     }
     write("\"", f)
 }
 
-STRINGS_START = 0x17b5
-STRINGS_END   = 0x68e3
-MAX_STRLEN    = 56
-MAX_WORDS     = 8
-
-fn disas_mem(f) {
+fn disas_mem(path) {
+    local f = open(path, "w")
     dp = 0
     // Executable code
     write("; Executable code\n\n", f)
@@ -153,7 +141,7 @@ fn disas_mem(f) {
         if m[dp] == 19 {
             disas_out(f)
         } else {
-            disas_operands(arity[m[dp]] ?: 0, f)
+            disas_operands(arity[m[dp]] || 0, f)
             dp += arity[m[dp]] + 1
         }
         write("\n", f)
@@ -192,6 +180,7 @@ fn disas_mem(f) {
         }
         write("\n", f)
     }
+    close(f)
 }
 
 fn find_str(addr) {
@@ -199,11 +188,12 @@ fn find_str(addr) {
     while char(m[addr]) ~ /[ -~\n]/ {
         str #= char(m[addr++])
     }
-    return str || "<not found>"
+    return str or "<not found>"
 }
 
-fn dump_strings(f) {
-    dp = 0
+fn dump_strings(path) {
+    local f = open(path, "w")
+    local dp = 0
     while dp < #m {
         if m[dp] >= ' ' && m[dp] <= '~' {
             write(fmt("%04x: ", dp), f)
@@ -215,10 +205,11 @@ fn dump_strings(f) {
         }
         dp++
     }
+    close(f)
 }
 
-bin = open(arg[1])
-while !eof(bin) {
+bin = open(arg[1] or "challenge.bin")
+while read(bin,0) {
     local l = getc(bin)
     local h = getc(bin)
     m[i++] = l | (h << 8)
